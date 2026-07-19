@@ -52,18 +52,39 @@ stages:
       inputs:
         pollingTimeoutSec: '300'
 
+    # Step 5: Save target directory contents so Stage 2 can access them
+    - task: PublishPipelineArtifact@1
+      displayName: 'Archive Compiled Target Artifacts'
+      inputs:
+        targetPath: 'target'
+        artifact: 'drop-target-folder'
+        publishLocation: 'pipeline'
+
 # ========================================================
 # STAGE 2: CONTAINERIZATION AND TRIVY SCAN
 # ========================================================
 - stage: ContainerSecurity
   displayName: '2. Docker Build & Trivy Scan'
-  dependsOn: BuildAndQualityScan     # Enforces that Stage 2 runs ONLY if Stage 1 passes
+  dependsOn: BuildAndQualityScan
   condition: succeeded()
   jobs:
   - job: DockerAndTrivy
     displayName: 'Dockerize & Run Security Scan'
     steps:
-    # Step 1: Install Trivy Security Scanner on the hosted agent
+    # Step 1: Fetch the compiled jar directory archived in Stage 1
+    - task: DownloadPipelineArtifact@2
+      displayName: 'Download Target Artifacts'
+      inputs:
+        buildType: 'current'
+        artifactName: 'drop-target-folder'
+        targetPath: '$(System.DefaultWorkingDirectory)/target'
+
+    # Step 2: Remove extra structural files to prevent Docker configuration issues
+    - script: |
+        rm -f target/*.original
+      displayName: 'Clean Target Artifacts'
+
+    # Step 3: Install Trivy Security Scanner on the hosted agent
     - script: |
         sudo apt-get install wget apt-transport-https gnupg lsb-release -y
         wget -qO - https://aquasecurity.github.io/trivy-repo/deb/public.key | gpg --dearmor | sudo tee /usr/share/keyrings/trivy.gpg > /dev/null
@@ -72,14 +93,12 @@ stages:
         sudo apt-get install trivy -y
       displayName: 'Install Trivy Scanner'
 
-    # Step 2: Build the Docker Image locally on the build runner
+    # Step 4: Build the Docker Image locally using the restored jar package
     - script: |
         docker build -t azuredvopspractice:$(Build.BuildId) .
       displayName: 'Docker Build Image'
 
-    # Step 3: Scan the newly built local Docker image using Trivy
-    # Note: --exit-code 0 ensures the pipeline visual logs display the vulnerabilities without stopping 
-    # the runner, allowing you to review bugs safely. Change to --exit-code 1 if you want to hard-fail builds.
+    # Step 5: Scan the newly built local Docker image using Trivy
     - script: |
         trivy image --severity HIGH,CRITICAL --exit-code 0 azuredvopspractice:$(Build.BuildId)
       displayName: 'Scan Docker Image with Trivy'
