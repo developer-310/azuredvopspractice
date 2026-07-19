@@ -60,15 +60,15 @@ stages:
         publishLocation: 'pipeline'
 
 # ========================================================
-# STAGE 2: CONTAINERIZATION AND TRIVY SCAN
+# STAGE 2: DOCKER BUILD, TRIVY SCAN & PUSH
 # ========================================================
-- stage: ContainerSecurity
-  displayName: '2. Docker Build & Trivy Scan'
+- stage: ContainerSecurityAndPush
+  displayName: '2. Container Security & ACR Push'
   dependsOn: BuildAndQualityScan
   condition: succeeded()
   jobs:
-  - job: DockerAndTrivy
-    displayName: 'Dockerize & Run Security Scan'
+  - job: BuildScanPush
+    displayName: 'Build, Scan and Push Image'
     steps:
     - task: DownloadPipelineArtifact@2
       displayName: 'Download Target Artifacts'
@@ -89,25 +89,22 @@ stages:
         sudo apt-get install trivy -y
       displayName: 'Install Trivy Scanner'
 
-    - script: |
-        docker build -t $(acrLoginServer)/$(imageRepository):$(Build.BuildId) .
+    # 1. Build using the native task (automatically tags with connection prefix)
+    - task: Docker@2
       displayName: 'Docker Build Image'
+      inputs:
+        containerRegistry: 'acrdevopspractice310'
+        repository: '$(imageRepository)'
+        command: 'build'
+        Dockerfile: '**/Dockerfile'
+        tags: '$(Build.BuildId)'
 
+    # 2. Scan the cached image directly
     - script: |
         trivy image --severity HIGH,CRITICAL --exit-code 0 $(acrLoginServer)/$(imageRepository):$(Build.BuildId)
       displayName: 'Scan Docker Image with Trivy'
 
-# ========================================================
-# STAGE 3: PUSH SECURE IMAGE TO REGISTRY
-# ========================================================
-- stage: PushToACR
-  displayName: '3. Push Image to Azure Registry'
-  dependsOn: ContainerSecurity
-  condition: succeeded()
-  jobs:
-  - job: PushImage
-    displayName: 'Push Image to ACR'
-    steps:
+    # 3. Push immediately while the image exists on the local daemon
     - task: Docker@2
       displayName: 'Push Image to Azure Container Registry'
       inputs:
