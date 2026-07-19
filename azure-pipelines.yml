@@ -89,7 +89,7 @@ stages:
         sudo apt-get install trivy -y
       displayName: 'Install Trivy Scanner'
 
-    # 1. Standard Docker Build (Bypasses the service connection credential clash)
+    # 1. Standard Docker Build
     - script: |
         docker build -t $(acrLoginServer)/$(imageRepository):$(Build.BuildId) .
       displayName: 'Docker Build Image'
@@ -99,11 +99,11 @@ stages:
         trivy image --severity HIGH,CRITICAL --exit-code 0 $(acrLoginServer)/$(imageRepository):$(Build.BuildId)
       displayName: 'Scan Docker Image with Trivy'
 
-    # 3. Authenticate using your connection and push to your Azure Container Registry
+    # 3. Authenticate and push using the exact matching image tag reference
     - task: Docker@2
       displayName: 'Push Image to Azure Container Registry'
       inputs:
         containerRegistry: 'acrdevopspractice310'
-        repository: '$(imageRepository)'
+        repository: '$(acrLoginServer)/$(imageRepository)' # <-- Updated to match your local cache name exactly
         command: 'push'
         tags: '$(Build.BuildId)'
