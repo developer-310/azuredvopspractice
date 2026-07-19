@@ -5,11 +5,15 @@ pool:
   vmImage: 'ubuntu-latest'
 
 stages:
-- stage: BuildStage
-  displayName: 'Compile, Validate, and Analyze Application'
+
+# ========================================================
+# STAGE 1: COMPILE AND CODE QUALITY SCAN
+# ========================================================
+- stage: BuildAndQualityScan
+  displayName: '1. Build & SonarQube Scan'
   jobs:
   - job: MavenBuild
-    displayName: 'Execute Maven Build & SonarQube Cloud Scan'
+    displayName: 'Maven Package & Scan'
     steps:
     # Step 1: Ensure Java 17 is installed on the agent
     - task: JavaToolInstaller@0
@@ -19,7 +23,7 @@ stages:
         jdkSourceOption: 'PreInstalled'
 
     # Step 2: Prepare SonarQube Cloud Analysis Configuration
-    - task: SonarCloudPrepare@3
+    - task: SonarCloudPrepare@4
       displayName: 'Prepare SonarQube Cloud Analysis'
       inputs:
         SonarCloud: 'newserviceconnectionforazuredevops'
@@ -35,7 +39,7 @@ stages:
       inputs:
         mavenPomFile: 'pom.xml'
         goals: 'clean package'
-        options: '-DskipTests' # Skips unit tests for the initial test run to speed up execution
+        options: '-DskipTests' 
         publishJUnitResults: false
         javaHomeOption: 'JDKVersion'
         jdkVersionOption: '1.17'
@@ -43,7 +47,39 @@ stages:
         sonarQubeRunAnalysis: true 
 
     # Step 4: Publish Quality Gate Results back to Azure DevOps UI
-    - task: SonarCloudPublish@3
+    - task: SonarCloudPublish@4
       displayName: 'Publish Quality Gate Result'
       inputs:
         pollingTimeoutSec: '300'
+
+# ========================================================
+# STAGE 2: CONTAINERIZATION AND TRIVY SCAN
+# ========================================================
+- stage: ContainerSecurity
+  displayName: '2. Docker Build & Trivy Scan'
+  dependsOn: BuildAndQualityScan     # Enforces that Stage 2 runs ONLY if Stage 1 passes
+  condition: succeeded()
+  jobs:
+  - job: DockerAndTrivy
+    displayName: 'Dockerize & Run Security Scan'
+    steps:
+    # Step 1: Install Trivy Security Scanner on the hosted agent
+    - script: |
+        sudo apt-get install wget apt-transport-https gnupg lsb-release -y
+        wget -qO - https://aquasecurity.github.io/trivy-repo/deb/public.key | gpg --dearmor | sudo tee /usr/share/keyrings/trivy.gpg > /dev/null
+        echo "deb [signed-by=/usr/share/keyrings/trivy.gpg] https://aquasecurity.github.io/trivy-repo/deb $(lsb_release -sc) main" | sudo tee /etc/apt/sources.list.d/trivy.list
+        sudo apt-get update
+        sudo apt-get install trivy -y
+      displayName: 'Install Trivy Scanner'
+
+    # Step 2: Build the Docker Image locally on the build runner
+    - script: |
+        docker build -t azuredvopspractice:$(Build.BuildId) .
+      displayName: 'Docker Build Image'
+
+    # Step 3: Scan the newly built local Docker image using Trivy
+    # Note: --exit-code 0 ensures the pipeline visual logs display the vulnerabilities without stopping 
+    # the runner, allowing you to review bugs safely. Change to --exit-code 1 if you want to hard-fail builds.
+    - script: |
+        trivy image --severity HIGH,CRITICAL --exit-code 0 azuredvopspractice:$(Build.BuildId)
+      displayName: 'Scan Docker Image with Trivy'
