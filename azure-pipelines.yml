@@ -6,10 +6,10 @@ pool:
 
 stages:
 - stage: BuildStage
-  displayName: 'Compile and Validate Application'
+  displayName: 'Compile, Validate, and Analyze Application'
   jobs:
   - job: MavenBuild
-    displayName: 'Execute Maven Build Pipeline'
+    displayName: 'Execute Maven Build & SonarQube Cloud Scan'
     steps:
     # Step 1: Ensure Java 17 is installed on the agent
     - task: JavaToolInstaller@0
@@ -18,9 +18,21 @@ stages:
         jdkArchitectureOption: 'x64'
         jdkSourceOption: 'PreInstalled'
 
-    # Step 2: Compile the Spring Boot application using the wrapper script
+    # Step 2: Prepare SonarQube Cloud Analysis Configuration
+    # (Must run BEFORE the Maven step)
+    - task: SonarCloudPrepare@3
+      displayName: 'Prepare SonarQube Cloud Analysis'
+      inputs:
+        SonarCloud: 'SonarCloudConnection'       # Matches your service connection name exactly
+        organization: 'developer-310'
+        scannerMode: 'Other'                      # 'Other' is strictly required for Maven/Gradle integrations
+        extraProperties: |
+          sonar.projectKey=developer-310_azuredvopspractice
+          sonar.projectName=azuredvopspractice
+
+    # Step 3: Compile the Spring Boot application and execute Sonar injection
     - task: Maven@4
-      displayName: 'Maven Package Application'
+      displayName: 'Maven Package Application & Scan'
       inputs:
         mavenPomFile: 'pom.xml'
         goals: 'clean package'
@@ -29,3 +41,11 @@ stages:
         javaHomeOption: 'JDKVersion'
         jdkVersionOption: '1.17'
         mavenVersionOption: 'Default'
+        # Crucial: This tells Maven v4 to execute the sonar-maven-plugin hooks
+        sonarQubeRunAnalysis: true 
+
+    # Step 4: Publish Quality Gate Results back to Azure DevOps UI
+    - task: SonarCloudPublish@3
+      displayName: 'Publish Quality Gate Result'
+      inputs:
+        pollingTimeoutSec: '300'
