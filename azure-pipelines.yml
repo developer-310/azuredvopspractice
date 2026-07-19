@@ -4,6 +4,11 @@ trigger:
 pool:
   vmImage: 'ubuntu-latest'
 
+variables:
+  # Centralized variables for easy adjustments
+  acrLoginServer: 'acrdevopspractice310.azurecr.io'
+  imageRepository: 'azuredvopspractice'
+
 stages:
 
 # ========================================================
@@ -93,12 +98,32 @@ stages:
         sudo apt-get install trivy -y
       displayName: 'Install Trivy Scanner'
 
-    # Step 4: Build the Docker Image locally using the restored jar package
+    # Step 4: Build the Docker Image locally using the full ACR server path prefix
     - script: |
-        docker build -t azuredvopspractice:$(Build.BuildId) .
+        docker build -t $(acrLoginServer)/$(imageRepository):$(Build.BuildId) .
       displayName: 'Docker Build Image'
 
     # Step 5: Scan the newly built local Docker image using Trivy
     - script: |
-        trivy image --severity HIGH,CRITICAL --exit-code 0 azuredvopspractice:$(Build.BuildId)
+        trivy image --severity HIGH,CRITICAL --exit-code 0 $(acrLoginServer)/$(imageRepository):$(Build.BuildId)
       displayName: 'Scan Docker Image with Trivy'
+
+# ========================================================
+# STAGE 3: PUSH SECURE IMAGE TO REGISTRY
+# ========================================================
+- stage: PushToACR
+  displayName: '3. Push Image to Azure Registry'
+  dependsOn: ContainerSecurity
+  condition: succeeded()
+  jobs:
+  - job: PushImage
+    displayName: 'Push Image to ACR'
+    steps:
+    # Authenticate and securely push the scanned image up using your manual service connection
+    - task: Docker@2
+      displayName: 'Push Image to Azure Container Registry'
+      inputs:
+        containerRegistry: 'acrServiceConnection'
+        repository: '$(imageRepository)'
+        command: 'push'
+        tags: '$(Build.BuildId)'
