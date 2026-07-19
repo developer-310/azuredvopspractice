@@ -1,0 +1,31 @@
+trigger:
+- main
+
+pool:
+  vmImage: 'ubuntu-latest'
+
+stages:
+- stage: BuildStage
+  displayName: 'Compile and Validate Application'
+  jobs:
+  - job: MavenBuild
+    displayName: 'Execute Maven Build Pipeline'
+    steps:
+    # Step 1: Ensure Java 17 is installed on the agent
+    - task: JavaToolInstaller@0
+      inputs:
+        versionSpec: '17'
+        jdkArchitectureOption: 'x64'
+        jdkSourceOption: 'PreInstalled'
+
+    # Step 2: Compile the Spring Boot application using the wrapper script
+    - task: Maven@4
+      displayName: 'Maven Package Application'
+      inputs:
+        mavenPomFile: 'pom.xml'
+        goals: 'clean package'
+        options: '-DskipTests' # Skips unit tests for the initial test run to speed up execution
+        publishJUnitResults: false
+        javaHomeOption: 'JDKVersion'
+        jdkVersionOption: '1.17'
+        mavenVersionOption: 'Default'
