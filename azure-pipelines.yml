@@ -99,11 +99,11 @@ stages:
         trivy image --severity HIGH,CRITICAL --exit-code 0 $(acrLoginServer)/$(imageRepository):$(Build.BuildId)
       displayName: 'Scan Docker Image with Trivy'
 
-    # 3. Authenticate and push using the exact matching image tag reference
-    - task: Docker@2
+    # 3. Explicit Login and Push using Service Connection Secrets
+    - script: |
+        echo "$(DockerPassword)" | docker login $(acrLoginServer) --username $(DockerUsername) --password-stdin
+        docker push $(acrLoginServer)/$(imageRepository):$(Build.BuildId)
       displayName: 'Push Image to Azure Container Registry'
-      inputs:
-        containerRegistry: 'acrdevopspractice310'
-        repository: '$(acrLoginServer)/$(imageRepository)' # <-- Updated to match your local cache name exactly
-        command: 'push'
-        tags: '$(Build.BuildId)'
+      env:
+        DockerUsername: $(acrdevopspractice310.username)
+        DockerPassword: $(acrdevopspractice310.password)
