@@ -89,14 +89,14 @@ stages:
         sudo apt-get install trivy -y
       displayName: 'Install Trivy Scanner'
 
-    # 1. Build using the native task (automatically tags with connection prefix)
+    # 1. Build using the native task (explicitly set to project root Dockerfile)
     - task: Docker@2
       displayName: 'Docker Build Image'
       inputs:
         containerRegistry: 'acrdevopspractice310'
         repository: '$(imageRepository)'
         command: 'build'
-        Dockerfile: '**/Dockerfile'
+        Dockerfile: './Dockerfile'
         tags: '$(Build.BuildId)'
 
     # 2. Scan the cached image directly
