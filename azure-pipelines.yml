@@ -7,6 +7,9 @@ pool:
 variables:
   acrLoginServer: 'acrdevopspractice310.azurecr.io'
   imageRepository: 'azuredvopspractice'
+  azureSubscriptionConnection: 'azure-subscription-connection'
+  resourceGroup: 'devopspractice'
+  aksCluster: 'aksdevopspractice310'
 
 stages:
 
@@ -108,3 +111,28 @@ stages:
         command: 'buildAndPush'
         Dockerfile: '$(System.DefaultWorkingDirectory)/Dockerfile'
         tags: '$(Build.BuildId)'
+
+# ========================================================
+# STAGE 3: DEPLOY MANIFESTS TO AKS
+# ========================================================
+- stage: DeployToAKS
+  displayName: '3. Deploy to AKS'
+  dependsOn: ContainerSecurityAndPush
+  condition: succeeded()
+  jobs:
+  - job: Deploy
+    displayName: 'Deploy Kubernetes Manifests'
+    steps:
+    - task: KubernetesManifest@1
+      displayName: 'Deploy Manifests to AKS'
+      inputs:
+        action: 'deploy'
+        connectionType: 'azureResourceManager'
+        azureSubscriptionConnection: '$(azureSubscriptionConnection)'
+        azureResourceGroup: '$(resourceGroup)'
+        kubernetesCluster: '$(aksCluster)'
+        namespace: 'default'
+        manifests: |
+          $(System.DefaultWorkingDirectory)/k8s/*.yaml
+        containers: |
+          $(acrLoginServer)/$(imageRepository):$(Build.BuildId)
