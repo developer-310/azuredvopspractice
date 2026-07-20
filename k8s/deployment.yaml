@@ -1,0 +1,28 @@
+apiVersion: apps/v1
+kind: Deployment
+metadata:
+  name: azuredvopspractice-deployment
+  labels:
+    app: azuredvopspractice
+spec:
+  replicas: 2
+  selector:
+    matchLabels:
+      app: azuredvopspractice
+  template:
+    metadata:
+      labels:
+        app: azuredvopspractice
+    spec:
+      containers:
+      - name: azuredvopspractice
+        image: acrdevopspractice310.azurecr.io/azuredvopspractice:BUILD_ID
+        ports:
+        - containerPort: 8080
+        resources:
+          requests:
+            memory: "256Mi"
+            cpu: "250m"
+          limits:
+            memory: "512Mi"
+            cpu: "500m"
