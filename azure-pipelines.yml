@@ -99,10 +99,21 @@ stages:
         trivy image --severity HIGH,CRITICAL --exit-code 0 $(acrLoginServer)/$(imageRepository):$(Build.BuildId)
       displayName: 'Scan Docker Image with Trivy'
 
-    # 3. Secure Push using custom Docker@2 command
+    # 3. Login to ACR via Service Connection
     - task: Docker@2
-      displayName: 'Push Image to ACR'
+      displayName: 'Registry Login'
       inputs:
         containerRegistry: 'acrdevopspractice310'
-        command: 'custom'
-        customCommand: 'push $(acrLoginServer)/$(imageRepository):$(Build.BuildId)'
+        command: 'login'
+
+    # 4. Direct push using authenticated session
+    - script: |
+        docker push $(acrLoginServer)/$(imageRepository):$(Build.BuildId)
+      displayName: 'Push Image to ACR'
+
+    # 5. Logout
+    - task: Docker@2
+      displayName: 'Registry Logout'
+      inputs:
+        containerRegistry: 'acrdevopspractice310'
+        command: 'logout'
