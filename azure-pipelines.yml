@@ -89,31 +89,21 @@ stages:
         sudo apt-get install trivy -y
       displayName: 'Install Trivy Scanner'
 
-    # 1. Local Docker Build
+    # 1. Build local docker image
     - script: |
         docker build -t $(acrLoginServer)/$(imageRepository):$(Build.BuildId) .
       displayName: 'Docker Build Image'
 
-    # 2. Trivy Vulnerability Scan
+    # 2. Trivy Scan
     - script: |
         trivy image --severity HIGH,CRITICAL --exit-code 0 $(acrLoginServer)/$(imageRepository):$(Build.BuildId)
       displayName: 'Scan Docker Image with Trivy'
 
-    # 3. Native Service Connection Login
+    # 3. Native Docker Task handles BOTH Authentication and Push automatically
     - task: Docker@2
-      displayName: 'Registry Login'
-      inputs:
-        containerRegistry: 'acrdevopspractice310'
-        command: 'login'
-
-    # 4. Push Image using active session
-    - script: |
-        docker push $(acrLoginServer)/$(imageRepository):$(Build.BuildId)
       displayName: 'Push Image to ACR'
-
-    # 5. Clean up session
-    - task: Docker@2
-      displayName: 'Registry Logout'
       inputs:
         containerRegistry: 'acrdevopspractice310'
-        command: 'logout'
+        repository: '$(imageRepository)'
+        command: 'push'
+        tags: '$(Build.BuildId)'
