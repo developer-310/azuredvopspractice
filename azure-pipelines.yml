@@ -89,21 +89,31 @@ stages:
         sudo apt-get install trivy -y
       displayName: 'Install Trivy Scanner'
 
-    # 1. Standard Docker Build
+    # 1. Local Docker Build
     - script: |
         docker build -t $(acrLoginServer)/$(imageRepository):$(Build.BuildId) .
       displayName: 'Docker Build Image'
 
-    # 2. Scan the locally built image with Trivy
+    # 2. Trivy Vulnerability Scan
     - script: |
         trivy image --severity HIGH,CRITICAL --exit-code 0 $(acrLoginServer)/$(imageRepository):$(Build.BuildId)
       displayName: 'Scan Docker Image with Trivy'
 
-    # 3. Explicit Login and Push using Service Connection Secrets
+    # 3. Native Service Connection Login
+    - task: Docker@2
+      displayName: 'Registry Login'
+      inputs:
+        containerRegistry: 'acrdevopspractice310'
+        command: 'login'
+
+    # 4. Push Image using active session
     - script: |
-        echo "$(DockerPassword)" | docker login $(acrLoginServer) --username $(DockerUsername) --password-stdin
         docker push $(acrLoginServer)/$(imageRepository):$(Build.BuildId)
-      displayName: 'Push Image to Azure Container Registry'
-      env:
-        DockerUsername: $(acrdevopspractice310.username)
-        DockerPassword: $(acrdevopspractice310.password)
+      displayName: 'Push Image to ACR'
+
+    # 5. Clean up session
+    - task: Docker@2
+      displayName: 'Registry Logout'
+      inputs:
+        containerRegistry: 'acrdevopspractice310'
+        command: 'logout'
