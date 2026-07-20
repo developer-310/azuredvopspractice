@@ -84,29 +84,26 @@ stages:
     - script: |
         sudo apt-get install wget apt-transport-https gnupg lsb-release -y
         wget -qO - https://aquasecurity.github.io/trivy-repo/deb/public.key | gpg --dearmor | sudo tee /usr/share/keyrings/trivy.gpg > /dev/null
-        echo "deb [signed-by=/usr/share/keyrings/trivy.gpg] https://aquasecurity.github.io/trivy-repo/deb $(lsb_release -sc) main" | sudo tee /runner/_work/_temp/trivy.list
+        echo "deb [signed-by=/usr/share/keyrings/trivy.gpg] https://aquasecurity.github.io/trivy-repo/deb $(lsb_release -sc) main" | sudo tee /etc/apt/sources.list.d/trivy.list
         sudo apt-get update
         sudo apt-get install trivy -y
       displayName: 'Install Trivy Scanner'
 
-    # 1. Build local Docker image
+    # 1. Local Docker Build
     - script: |
         docker build -t $(acrLoginServer)/$(imageRepository):$(Build.BuildId) .
       displayName: 'Docker Build Image'
 
-    # 2. Scan image with Trivy
+    # 2. Trivy Vulnerability Scan
     - script: |
         trivy image --severity HIGH,CRITICAL --exit-code 0 $(acrLoginServer)/$(imageRepository):$(Build.BuildId)
       displayName: 'Scan Docker Image with Trivy'
 
-    # 3. Authenticate to registry using service connection credentials
+    # 3. Native Service Connection Push (Handles auth + upload in 1 step)
     - task: Docker@2
-      displayName: 'Docker Login'
+      displayName: 'Push Image to ACR'
       inputs:
         containerRegistry: 'acrdevopspractice310'
-        command: 'login'
-
-    # 4. Push image directly
-    - script: |
-        docker push $(acrLoginServer)/$(imageRepository):$(Build.BuildId)
-      displayName: 'Push Image to ACR'
+        repository: '$(acrLoginServer)/$(imageRepository)'
+        command: 'push'
+        tags: '$(Build.BuildId)'
